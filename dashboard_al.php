@@ -18,7 +18,7 @@ if ($user_tipo === 'AG') {
 
 $tab_ativa = isset($_GET['tab']) ? $_GET['tab'] : 'apartamentos';
 
-// Eliminar morador clt só dentro do próprio edifício
+// Eliminar morador clt so dentro do proprio edificio
 if (isset($_GET['eliminar_clt'])) {
     $id_eliminar = strtoupper(trim($_GET['eliminar_clt']));
     $stmt = $db->prepare("DELETE FROM utilizadores WHERE id_unico = :id AND tipo_acesso = 'CLT' AND id_unico LIKE :prefixo");
