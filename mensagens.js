@@ -1,5 +1,5 @@
 // Mostra alertas de sucesso/erro com base em parâmetros na URL,
-// em vez de o PHP gerar blocos <script> diretamente no HTML.
+
 document.addEventListener('DOMContentLoaded', function () {
     const params = new URLSearchParams(window.location.search);
 

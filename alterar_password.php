@@ -19,7 +19,7 @@ if ($user_tipo === 'AG') {
     $link_retorno = "dashboard_al.php";
 }
 
-// LÓGICA DE ATUALIZAÇÃO DA PASSWORD
+// logica para alterar a password
 if (isset($_POST['mudar_pass'])) {
     $pass_atual = $_POST['pass_atual'];
     $nova_pass = $_POST['nova_pass'];
