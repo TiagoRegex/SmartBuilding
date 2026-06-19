@@ -12,6 +12,16 @@ $user_tipo = $_SESSION['user_tipo'];
 if (($user_tipo === 'AG' || $user_tipo === 'AL') && isset($_GET['simular_apt']) && isset($_GET['simular_edf'])) {
     $meu_edificio = strtoupper(trim($_GET['simular_edf']));
     $meu_apartamento = strtoupper(trim($_GET['simular_apt']));
+
+    // Um AL só pode simular apartamentos dentro do seu próprio edifício
+    if ($user_tipo === 'AL') {
+        preg_match('/^(E\d+)/i', $user_id, $matches_al);
+        $edificio_al = isset($matches_al[1]) ? strtoupper($matches_al[1]) : '';
+        if ($meu_edificio !== $edificio_al) {
+            header("Location: dashboard_al.php");
+            exit();
+        }
+    }
     $modo_simulacao = true;
 } else {
     $modo_simulacao = false;
@@ -20,31 +30,45 @@ if (($user_tipo === 'AG' || $user_tipo === 'AL') && isset($_GET['simular_apt']) 
     $meu_apartamento = isset($matches[2]) ? strtoupper($matches[2]) : 'A1';
 }
 
+
 $divisao_ativa = isset($_GET['divisao']) ? $_GET['divisao'] : 'Sala';
 
-// Lógica de gravação ao clicar nos botões
 if (isset($_GET['acao']) && isset($_GET['id_iot'])) {
     $id_iot = $_GET['id_iot'];
     $acao = $_GET['acao'];
-    $estado_atual = trim($_GET['estado_atual']);
-    $novo_estado = $estado_atual;
 
-    if ($acao === 'alternar') {
-        if ($estado_atual === 'ON') { $novo_estado = 'OFF'; }
-        elseif ($estado_atual === 'OFF') { $novo_estado = 'ON'; }
-        else {
-            if (strpos($estado_atual, 'OFF') !== false) { $novo_estado = str_replace('OFF', 'ON', $estado_atual); }
-            else { $novo_estado = str_replace('ON', 'OFF', $estado_atual); }
+    // Confirma que o dispositivo pertence mesmo a este edifício/apartamento
+    // antes de permitir qualquer alteração (evita controlar dispositivos de outros)
+    $stmt_check = $db->prepare("SELECT estado FROM equipamentos_iot WHERE id_equipamento = :id AND id_edificio = :edf AND id_apartamento = :apt");
+    $stmt_check->bindValue(':id', $id_iot, SQLITE3_INTEGER);
+    $stmt_check->bindValue(':edf', $meu_edificio, SQLITE3_TEXT);
+    $stmt_check->bindValue(':apt', $meu_apartamento, SQLITE3_TEXT);
+    $dispositivo = $stmt_check->execute()->fetchArray(SQLITE3_ASSOC);
+
+    if ($dispositivo) {
+        $estado_atual = trim($dispositivo['estado']);
+        $novo_estado = $estado_atual;
+
+        if ($acao === 'alternar') {
+            if ($estado_atual === 'ON') { $novo_estado = 'OFF'; }
+            elseif ($estado_atual === 'OFF') { $novo_estado = 'ON'; }
+            else {
+                if (strpos($estado_atual, 'OFF') !== false) { $novo_estado = str_replace('OFF', 'ON', $estado_atual); }
+                else { $novo_estado = str_replace('ON', 'OFF', $estado_atual); }
+            }
+        } elseif ($acao === 'subir_temp' || $acao === 'descer_temp') {
+            preg_match('/\d+(\.\d+)?/', $estado_atual, $num);
+            $num_atual = isset($num[0]) ? floatval($num[0]) : 20.0;
+            $novo_num = ($acao === 'subir_temp') ? ($num_atual + 0.5) : ($num_atual - 0.5);
+            if (strpos($estado_atual, 'OFF') !== false) { $novo_estado = "OFF ($novo_num)"; }
+            else { $novo_estado = "ON ($novo_num)"; }
         }
-    } elseif ($acao === 'subir_temp' || $acao === 'descer_temp') {
-        preg_match('/\d+(\.\d+)?/', $estado_atual, $num);
-        $num_atual = isset($num[0]) ? floatval($num[0]) : 20.0;
-        $novo_num = ($acao === 'subir_temp') ? ($num_atual + 0.5) : ($num_atual - 0.5);
-        if (strpos($estado_atual, 'OFF') !== false) { $novo_estado = "OFF ($novo_num)"; }
-        else { $novo_estado = "ON ($novo_num)"; }
-    }
 
-    $db->exec("UPDATE equipamentos_iot SET estado = '$novo_estado' WHERE id_equipamento = $id_iot");
+        $stmt_update = $db->prepare("UPDATE equipamentos_iot SET estado = :estado WHERE id_equipamento = :id");
+        $stmt_update->bindValue(':estado', $novo_estado, SQLITE3_TEXT);
+        $stmt_update->bindValue(':id', $id_iot, SQLITE3_INTEGER);
+        $stmt_update->execute();
+    }
 
     $redir = "dashboard_clt.php?divisao=" . $divisao_ativa;
     if ($modo_simulacao) { $redir .= "&simular_apt=$meu_apartamento&simular_edf=$meu_edificio"; }
@@ -52,7 +76,11 @@ if (isset($_GET['acao']) && isset($_GET['id_iot'])) {
     exit();
 }
 
-$res_dispositivos = $db->query("SELECT * FROM equipamentos_iot WHERE id_edificio = '$meu_edificio' AND id_apartamento = '$meu_apartamento' AND divisao = '$divisao_ativa'");
+$stmt_dispositivos = $db->prepare("SELECT * FROM equipamentos_iot WHERE id_edificio = :edf AND id_apartamento = :apt AND divisao = :div");
+$stmt_dispositivos->bindValue(':edf', $meu_edificio, SQLITE3_TEXT);
+$stmt_dispositivos->bindValue(':apt', $meu_apartamento, SQLITE3_TEXT);
+$stmt_dispositivos->bindValue(':div', $divisao_ativa, SQLITE3_TEXT);
+$res_dispositivos = $stmt_dispositivos->execute();
 ?>
 <!DOCTYPE html>
 <html lang="pt">

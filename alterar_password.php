@@ -29,19 +29,19 @@ if (isset($_POST['mudar_pass'])) {
     $stmt->bindValue(':id', $user_id, SQLITE3_TEXT);
     $user = $stmt->execute()->fetchArray(SQLITE3_ASSOC);
 
-    if ($user && $user['password'] === $pass_atual) {
-        // Atualiza para a nova password
+   if ($user && password_verify($pass_atual, $user['password'])) {
+        // Atualiza para a nova password (guardada como hash)
+        $novo_hash = password_hash($nova_pass, PASSWORD_DEFAULT);
         $update = $db->prepare("UPDATE utilizadores SET password = :nova WHERE id_unico = :id");
-        $update->bindValue(':nova', $nova_pass, SQLITE3_TEXT);
+        $update->bindValue(':nova', $novo_hash, SQLITE3_TEXT);
+        $update->bindValue(':id', $user_id, SQLITE3_TEXT);
         $update->execute();
-        
-        echo "<script>
-                alert('Password alterada com sucesso!');
-                window.location.href = '$link_retorno';
-              </script>";
+
+        header("Location: $link_retorno?pass_alterada=1");
         exit();
     } else {
-        echo "<script>alert('Erro: A password atual está incorreta!');</script>";
+        header("Location: alterar_password.php?erro_pass=1");
+        exit();
     }
 }
 ?>
@@ -104,7 +104,7 @@ if (isset($_POST['mudar_pass'])) {
         </div>
 
     </div>
-
+ <script src="js/mensagens.js"></script>
 </body>
 </html>
 <?php $db->close(); ?>

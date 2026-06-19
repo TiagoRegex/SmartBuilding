@@ -11,10 +11,12 @@ $db->exec("CREATE TABLE IF NOT EXISTS utilizadores (
 // Limpar dados antigos para o reteste limpo
 $db->exec("DELETE FROM utilizadores");
 
-// Inserir a nova conta mestre do AG corrigida para o formato correto
+// A password é guardada como hash sem plain text
+$hash_inicial = password_hash('1234', PASSWORD_DEFAULT);
 $stmt = $db->prepare("INSERT INTO utilizadores (id_unico, password, tipo_acesso) VALUES (:id, :pass, :tipo)");
 $stmt->bindValue(':id', 'AG1', SQLITE3_TEXT);
-$stmt->bindValue(':pass', '1234', SQLITE3_TEXT);
+// $hash_inicial serve como hash da password, garantindo segurança
+$stmt->bindValue(':pass', $hash_inicial, SQLITE3_TEXT);
 $stmt->bindValue(':tipo', 'AG', SQLITE3_TEXT);
 $stmt->execute();
 

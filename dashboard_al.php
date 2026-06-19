@@ -18,21 +18,35 @@ if ($user_tipo === 'AG') {
 
 $tab_ativa = isset($_GET['tab']) ? $_GET['tab'] : 'apartamentos';
 
+// Eliminar morador clt só dentro do próprio edifício
 if (isset($_GET['eliminar_clt'])) {
-    $id_eliminar = $_GET['eliminar_clt'];
-    $db->exec("DELETE FROM utilizadores WHERE id_unico = '$id_eliminar' AND tipo_acesso = 'CLT'");
+    $id_eliminar = strtoupper(trim($_GET['eliminar_clt']));
+    $stmt = $db->prepare("DELETE FROM utilizadores WHERE id_unico = :id AND tipo_acesso = 'CLT' AND id_unico LIKE :prefixo");
+    $stmt->bindValue(':id', $id_eliminar, SQLITE3_TEXT);
+    $stmt->bindValue(':prefixo', $meu_edificio . '%', SQLITE3_TEXT);
+    $stmt->execute();
     header("Location: dashboard_al.php?edificio=$meu_edificio&tab=contas");
     exit();
 }
 
+// Criar morador obrigatoriamente dentro do próprio edifício
 if (isset($_POST['criar_clt'])) {
     $novo_clt_id = strtoupper(trim($_POST['clt_id']));
     $clt_pass = $_POST['clt_pass'];
-    $db->exec("INSERT OR IGNORE INTO utilizadores (id_unico, password, tipo_acesso) VALUES ('$novo_clt_id', '$clt_pass', 'CLT')");
+
+    // Garante que o novo ID pertence mesmo ao edifício do AL autenticado
+    if (strpos($novo_clt_id, $meu_edificio) === 0) {
+        $hash = password_hash($clt_pass, PASSWORD_DEFAULT);
+        $stmt = $db->prepare("INSERT OR IGNORE INTO utilizadores (id_unico, password, tipo_acesso) VALUES (:id, :pass, 'CLT')");
+        $stmt->bindValue(':id', $novo_clt_id, SQLITE3_TEXT);
+        $stmt->bindValue(':pass', $hash, SQLITE3_TEXT);
+        $stmt->execute();
+    }
     header("Location: dashboard_al.php?edificio=$meu_edificio&tab=contas");
     exit();
 }
 
+// Adicionar dispositivo IoT (já estava a usar prepared statement - mantido)
 if (isset($_POST['add_iot'])) {
     $tipo = $_POST['iot_tipo'];
     $divisao = $_POST['iot_divisao'];
@@ -50,15 +64,24 @@ if (isset($_POST['add_iot'])) {
     exit();
 }
 
+// Eliminar dispositivo IoT - só dentro do próprio edifício
 if (isset($_GET['eliminar_iot'])) {
     $id_iot = $_GET['eliminar_iot'];
-    $db->exec("DELETE FROM equipamentos_iot WHERE id_equipamento = $id_iot");
+    $stmt = $db->prepare("DELETE FROM equipamentos_iot WHERE id_equipamento = :id AND id_edificio = :edificio");
+    $stmt->bindValue(':id', $id_iot, SQLITE3_INTEGER);
+    $stmt->bindValue(':edificio', $meu_edificio, SQLITE3_TEXT);
+    $stmt->execute();
     header("Location: dashboard_al.php?edificio=$meu_edificio&tab=apartamentos");
     exit();
 }
 
-$moradores = $db->query("SELECT * FROM utilizadores WHERE id_unico LIKE '$meu_edificio%' AND tipo_acesso = 'CLT'");
-$dispositivos = $db->query("SELECT * FROM equipamentos_iot WHERE id_edificio = '$meu_edificio' ORDER BY id_apartamento ASC");
+$stmt_moradores = $db->prepare("SELECT * FROM utilizadores WHERE id_unico LIKE :prefixo AND tipo_acesso = 'CLT'");
+$stmt_moradores->bindValue(':prefixo', $meu_edificio . '%', SQLITE3_TEXT);
+$moradores = $stmt_moradores->execute();
+
+$stmt_dispositivos = $db->prepare("SELECT * FROM equipamentos_iot WHERE id_edificio = :edificio ORDER BY id_apartamento ASC");
+$stmt_dispositivos->bindValue(':edificio', $meu_edificio, SQLITE3_TEXT);
+$dispositivos = $stmt_dispositivos->execute();
 ?>
 <!DOCTYPE html>
 <html lang="pt">
@@ -196,24 +219,7 @@ $dispositivos = $db->query("SELECT * FROM equipamentos_iot WHERE id_edificio = '
             </main>
         </div>
     </div>
-
-    <script>
-    function atualizarAparelhos() {
-        const divisao = document.getElementById('iot_divisao').value;
-        const selectTipo = document.getElementById('iot_tipo');
-        if(!selectTipo) return;
-        selectTipo.innerHTML = "";
-        let opcoes = [];
-        if (divisao === "Sala" || divisao === "Quarto") opcoes = ["Iluminação", "Climatização", "Estores"];
-        else if (divisao === "Cozinha") opcoes = ["Iluminação", "Forno", "Exaustor"];
-        else if (divisao === "WC") opcoes = ["Iluminação", "Piso Radiante"];
-        opcoes.forEach(function(aparelho) {
-            let opt = document.createElement('option');
-            opt.value = aparelho; opt.innerHTML = aparelho; selectTipo.appendChild(opt);
-        });
-    }
-    if(document.getElementById('iot_divisao')) atualizarAparelhos();
-    </script>
+  <script src="js/dashboard_al.js"></script>
 </body>
 </html>
 <?php $db->close(); ?>

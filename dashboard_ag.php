@@ -12,11 +12,18 @@ if (isset($_POST['criar_usuario'])) {
     $nova_pass = $_POST['nova_pass'];
     $tipo_user = $_POST['tipo_user'];
 
-    $stmt = $db->prepare("INSERT OR IGNORE INTO utilizadores (id_unico, password, tipo_acesso) VALUES (:id, :pass, :tipo)");
-    $stmt->bindValue(':id', $novo_id, SQLITE3_TEXT);
-    $stmt->bindValue(':pass', $nova_pass, SQLITE3_TEXT);
-    $stmt->bindValue(':tipo', $tipo_user, SQLITE3_TEXT);
-    $stmt->execute();
+     // Só permite criar contas com um tipo de acesso válido
+    $tipos_validos = ['CLT', 'AL', 'AG'];
+    if (in_array($tipo_user, $tipos_validos, true) && $novo_id !== '') {
+        // A password nunca é guardada em texto simples
+        $hash = password_hash($nova_pass, PASSWORD_DEFAULT);
+
+        $stmt = $db->prepare("INSERT OR IGNORE INTO utilizadores (id_unico, password, tipo_acesso) VALUES (:id, :pass, :tipo)");
+        $stmt->bindValue(':id', $novo_id, SQLITE3_TEXT);
+        $stmt->bindValue(':pass', $hash, SQLITE3_TEXT);
+        $stmt->bindValue(':tipo', $tipo_user, SQLITE3_TEXT);
+        $stmt->execute();
+    }
     header("Location: dashboard_ag.php");
     exit();
 }
@@ -106,7 +113,7 @@ $usuarios = $db->query("SELECT * FROM utilizadores");
                                     <?php while ($row = $usuarios->fetchArray(SQLITE3_ASSOC)): ?>
                                     <tr>
                                         <td><?php echo $row['id_unico']; ?></td>
-                                        <td><?php echo $row['password']; ?></td>
+                                        <td><em style="color:#64748b;">(encriptada)</em></td>
                                         <td><strong><?php echo $row['tipo_acesso']; ?></strong></td>
                                         <td>
                                             <?php if ($row['id_unico'] !== $_SESSION['user_id']): ?>
@@ -125,16 +132,7 @@ $usuarios = $db->query("SELECT * FROM utilizadores");
             </main>
         </div>
     </div>
-
-    <script>
-    function atualizarExemplo() {
-        const tipo = document.getElementById('tipo_user').value;
-        const inputId = document.getElementById('novo_id');
-        if(tipo === 'CLT') inputId.placeholder = "Ex: E1A1CLT1";
-        if(tipo === 'AL') inputId.placeholder = "Ex: E1AL1";
-        if(tipo === 'AG') inputId.placeholder = "Ex: AG2";
-    }
-    </script>
+     <script src="js/dashboard_ag.js"></script>
 </body>
 </html>
 <?php $db->close(); ?>
